@@ -1,4 +1,4 @@
-# RaftlabAssignment (.NET Core 3.1)
+# RaftlabAssignment (Using .NET Core 3.1)
 
 This project is a sample `.NET Core 3.1` solution simulating a service that fetches and processes user data from an external public API ([https://reqres.in](https://reqres.in)). It demonstrates proper API client design using `HttpClient`, resilience with `Polly`, and in-memory caching. The project follows the repository and service pattern, along with Clean Architecture principles.
 
@@ -18,7 +18,7 @@ RaftlabAssignment.sln
 │   ├── Models
 │   └── Services
 │
-├── RaftlabAssignment.Api      # Optional demo console app for running the service
+├── RaftlabAssignment.Api      # Demo console app for running the service (startup project to run Api directly)
 │
 └── RaftlabAssignment.Tests           # xUnit + Moq unit tests
 ```
@@ -47,7 +47,7 @@ Or via Visual Studio → Build Solution (`Ctrl+Shift+B`)
 ### ▶️ Run the Console App
 
 ```bash
-cd RaftlabAssignment.ConsoleApp
+cd RaftlabAssignment.Api
 dotnet run
 ```
 
@@ -68,7 +68,7 @@ Tests use **xUnit** and **Moq** to verify service behavior.
 
 ## 💡 Design Decisions
 
-- **HttpClient via constructor injection** — Allows use of `IHttpClientFactory` if hosted.
+- **HttpClient via constructor injection**
 - **Service pattern** — All business logic encapsulated in `ExternalUserService`.
 - **DTOs vs Domain Models** — Raw API responses (`ApiUser`) mapped to internal `User` models.
 - **Async/Await** — All external I/O is fully asynchronous.
@@ -79,16 +79,25 @@ Tests use **xUnit** and **Moq** to verify service behavior.
 ## 🔁 Polly Integration (Retry Logic)
 
 - **Polly** is used via a named `HttpClient` policy (e.g., retry on transient failures).
-- Configured in `Startup` or `HttpClientFactory` registration (in hosting scenarios).
+- Configured in `Startup` registration.
 - Retry logic ensures:
-  - 3 retries on transient failures (e.g., 5xx)
-  - Delay of 1s, 2s, 3s between retries
+  - Every request using this named client will retry up to 3 times on failure.
+  - No need to manually retry in your code — Polly handles it.
 
 ```csharp
-services.AddHttpClient("ExternalAPI")
-    .AddPolicyHandler(GetRetryPolicy());
+  services.AddHttpClient<IExternalUserService, ExternalUserService>()
+      .AddPolicyHandler(GetRetryPolicy());
 ```
 
+```csharp
+  private static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
+  {
+      return HttpPolicyExtensions
+          .HandleTransientHttpError()
+          .WaitAndRetryAsync(3, retryAttempt =>
+              TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
+  }
+```
 ---
 
 ## 🧠 Caching (In-Memory)
